@@ -1,15 +1,156 @@
 const S5Client = s5client.S5Client;
-
 const headers = {};
-const customClientOptions = {
-  authToken: PORTAL_AUTH_TOKEN,
-  headers,
-  withCredentials: false,
-};
+const DEFAULT_PORTAL_URL = "http://localhost:5522";
+const DEFAULT_PORTAL_AUTH_TOKEN = "";
+
+let client;
+let portalurl;
+let authtoken;
+
+//
+// buildClient
+
+function buildClient(BUILD_PORTAL_URL, BUILD_PORTAL_AUTH_TOKEN) {
+  const customClientOptions = {
+    authToken: BUILD_PORTAL_AUTH_TOKEN,
+    headers,
+    withCredentials: false,
+  };
+
+  // Instantiate the S5Client
+  client = new S5Client(BUILD_PORTAL_URL, customClientOptions);
+}
+
+portalurl = getCookie("portalurl");
+authtoken = getCookie("authtoken");
+
+if (portalurl && authtoken === null) {
+  buildClient(portalurl, "");
+}
+if (portalurl && authtoken) {
+  buildClient(portalurl, authtoken);
+}
+if (portalurl === null && authtoken === null) {
+  buildClient(PORTAL_URL, PORTAL_AUTH_TOKEN);
+}
+
+//
+// login
+
+var inputAuthToken = document.getElementById("authToken-input");
+var loginBtn = document.getElementById("login-button");
+
+function login() {
+  var portalUrlInput = document.getElementById("s5portal-input").value;
+  var authTokenInput = document.getElementById("authToken-input").value;
+
+  if (portalUrlInput) {
+    portalurl = portalUrlInput;
+  } else {
+    portalurl = DEFAULT_PORTAL_URL;
+  }
+
+  if (authTokenInput) {
+    authtoken = authTokenInput;
+  } else {
+    authtoken = DEFAULT_PORTAL_AUTH_TOKEN;
+  }
+
+  if (portalurl) {
+    setCookie("portalurl", portalurl, 7); // Save the authToken in a cookie for 7 days
+  }
+
+  if (authtoken) {
+    setCookie("authToken", authtoken, 7); // Save the authToken in a cookie for 7 days
+  }
+
+  buildClient(portalurl, authtoken);
+}
+
+//
+// logout
+
+function logout() {
+  eraseCookie("portalurl"); // Erase the portalurl cookie
+  eraseCookie("authToken"); // Erase the authToken cookie
+  buildClient(PORTAL_URL, PORTAL_AUTH_TOKEN);
+}
+
+//
+// Function to set a cookie
+
+function setCookie(name, value, days) {
+  var expires = "";
+  if (days) {
+    var date = new Date();
+    date.setTime(date.getTime() + days * 24 * 60 * 60 * 1000);
+    expires = "; expires=" + date.toUTCString();
+  }
+  document.cookie = name + "=" + (value || "") + expires + "; path=/";
+}
+
+//
+// Function to get the value of a cookie
+
+function getCookie(name) {
+  var nameEQ = name + "=";
+  var ca = document.cookie.split(";");
+  for (var i = 0; i < ca.length; i++) {
+    var c = ca[i];
+    while (c.charAt(0) == " ") {
+      c = c.substring(1, c.length);
+    }
+    if (c.indexOf(nameEQ) == 0) {
+      return c.substring(nameEQ.length, c.length);
+    }
+  }
+  return null;
+}
+
+//
+// Function to erase a cookie
+
+function eraseCookie(name) {
+  document.cookie = name + "=; Max-Age=-99999999; path=/";
+}
+
+if (portalurl) {
+  document.getElementById("account-button").classList.add("hidden");
+  document.getElementById("logout-button").classList.remove("hidden");
+}
+
+document.getElementById("account-button").addEventListener("click", function () {
+  document.getElementById("account-button").classList.add("hidden");
+  document.getElementById("cancel-button").classList.remove("hidden");
+  document.getElementById("input-section").classList.remove("hidden");
+  document.getElementById("authToken-input").value = "";
+});
+
+document.getElementById("cancel-button").addEventListener("click", function () {
+  document.getElementById("account-button").classList.remove("hidden");
+  document.getElementById("cancel-button").classList.add("hidden");
+  document.getElementById("input-section").classList.add("hidden");
+});
+
+document.getElementById("login-button").addEventListener("click", function () {
+  login();
+  document.getElementById("input-section").classList.add("hidden");
+  document.getElementById("account-button").classList.add("hidden");
+  document.getElementById("logout-button").classList.remove("hidden");
+});
+
+document.getElementById("logout-button").addEventListener("click", function () {
+  logout();
+  document.getElementById("logout-button").classList.add("hidden");
+  document.getElementById("account-button").classList.remove("hidden");
+});
 
 $(function () {
   $("#tabs").tabs();
 });
+
+//
+// Toggle dark/light mode
 
 $(document).ready(function () {
   // Check if the user's preference is set to dark mode
@@ -38,6 +179,7 @@ $(document).ready(function () {
 
 //
 // Add responsive behavior
+
 $(window).on("resize", function () {
   adjustLayout();
 });
@@ -66,6 +208,9 @@ function openTab(tabName) {
   // Show the selected tab content
   document.getElementById(tabName).style.display = "block";
 }
+
+//
+// clear all Elements
 
 function clearAllElements() {
   var inputElements = document.getElementsByTagName("input");
@@ -96,6 +241,13 @@ function clearAllElements() {
     }
   }
 
+  var outputElements = document.getElementsByClassName("outputmeta");
+  for (var i = 0; i < outputElements.length; i++) {
+    if (outputElements[i].innerHTML !== "") {
+      outputElements[i].innerHTML = "";
+    }
+  }
+
   var outputElements = document.getElementsByClassName("outputtext");
   for (var i = 0; i < outputElements.length; i++) {
     if (outputElements[i].innerHTML !== "") {
@@ -112,17 +264,13 @@ function clearAllElements() {
 }
 
 //
-// Instantiate the S5Client
-const client = new S5Client(PORTAL_URL, customClientOptions);
-
-//
 // handleFileUpload
 
 let uploadedFileCID = null;
 
 async function handleFileUpload(event) {
   const file = event.target.files[0];
-  console.log("No1:  " + file.name);
+
   if (!file) {
     console.error("No file selected");
     return;
@@ -132,9 +280,7 @@ async function handleFileUpload(event) {
     outputUploadCid.innerHTML = "<br /><div>waiting ... </div>";
     outputUploadUrl.innerHTML = "<br /><div></div>";
     // Upload the file
-    console.log("No2:  " + file.name);
     const { cid } = await client.uploadFile(file);
-    console.log("No3:  " + cid);
 
     let fileNameSplited;
     let fileNameEndWith;
@@ -150,16 +296,9 @@ async function handleFileUpload(event) {
       downloadBtn.disabled = false;
     }
 
-    const urlOutput = `${PORTAL_URL}/${cid}${CidEndWith}${
-      PORTAL_AUTH_TOKEN ? `?auth_token=${PORTAL_AUTH_TOKEN}` : ""
-    }`;
+    const urlOutput = `${PORTAL_URL}/${cid}${CidEndWith}${PORTAL_AUTH_TOKEN ? `?auth_token=${PORTAL_AUTH_TOKEN}` : ""}`;
     outputUploadCid.innerHTML = "<br /><div>CID = " + cid + "</div>";
-    outputUploadUrl.innerHTML =
-      '<br /><div>Url = <a href="' +
-      urlOutput +
-      '" target="_blank">' +
-      cid +
-      "</a> </div>";
+    outputUploadUrl.innerHTML = '<br /><div>Url = <a href="' + urlOutput + '" target="_blank">' + cid + "</a> </div>";
     uploadedFileCID = cid;
   } catch (error) {
     console.error("Error:", error);
@@ -210,19 +349,14 @@ inputUploadFromUrl.addEventListener("input", function () {
 });
 
 async function uploadFromUrl() {
-  var inputValueUploadFromUrl = document.getElementById(
-    "uploadFromUrl-input"
-  ).value;
-  var outputUploadFromUrlCid = document.getElementById(
-    "outputUploadFromUrlCid"
-  );
+  var inputValueUploadFromUrl = document.getElementById("uploadFromUrl-input").value;
+  var outputUploadFromUrlCid = document.getElementById("outputUploadFromUrlCid");
   let response;
   outputUploadFromUrlCid.innerHTML = "<br /><div> waiting ...</div>";
 
   response = await client.uploadFromUrl(inputValueUploadFromUrl);
 
-  outputUploadFromUrlCid.innerHTML =
-    "<br /><div>CID = " + response.cid + "</div>";
+  outputUploadFromUrlCid.innerHTML = "<br /><div>CID = " + response.cid + "</div>";
 }
 
 //
@@ -245,15 +379,8 @@ async function uploadData() {
   outputData.innerHTML = "<br /><div> waiting ...</div>";
 
   response = await client.uploadData(inputData, dataNAME);
-  const urlOutput = `${PORTAL_URL}/${response.cid}.txt${
-    PORTAL_AUTH_TOKEN ? `?auth_token=${PORTAL_AUTH_TOKEN}` : ""
-  }`;
-  outputData.innerHTML =
-    '<br /><div>CID = <a href="' +
-    urlOutput +
-    '" target="_blank">' +
-    response.cid +
-    "</a> </div>";
+  const urlOutput = `${PORTAL_URL}/${response.cid}.txt${PORTAL_AUTH_TOKEN ? `?auth_token=${PORTAL_AUTH_TOKEN}` : ""}`;
+  outputData.innerHTML = '<br /><div>CID = <a href="' + urlOutput + '" target="_blank">' + response.cid + "</a> </div>";
 }
 
 //
@@ -289,10 +416,7 @@ async function arrayBufferToString(buffer) {
     if (i + addition > length) {
       addition = length - i;
     }
-    result += String.fromCharCode.apply(
-      null,
-      bufView.subarray(i, i + addition)
-    );
+    result += String.fromCharCode.apply(null, bufView.subarray(i, i + addition));
   }
   return result;
 }
@@ -315,9 +439,7 @@ async function downloadDir() {
   var inputDirNAME = document.getElementById("directoryNAME-input");
   var dirBtn = document.getElementById("directory-btn");
 
-  let directoryCID = client.tools.convertDownloadDirectoryInputCid(
-    inputDirURL.value
-  );
+  let directoryCID = client.tools.convertDownloadDirectoryInputCid(inputDirURL.value);
 
   if (inputDirNAME.value === "") {
     name = directoryCID;
@@ -383,46 +505,27 @@ async function uploadDir() {
     for (var i = 0; i < files.length; i++) {
       var file = files[i];
       const filesArray = Array.from(files);
-      const directory = filesArray.reduce(
-        (acc, file) => ({ ...acc, [getRelativeFilePath(file)]: file }),
-        {}
-      );
+      const directory = filesArray.reduce((acc, file) => ({ ...acc, [getRelativeFilePath(file)]: file }), {});
       const name = encodeURIComponent(file.name);
 
       response = await client.uploadDirectory(directory, {
         customDirname: inputDirUploadName,
       });
 
-      output.innerHTML +=
-        "<div>" +
-        getRelativeFilePath(file) +
-        " (" +
-        file.size +
-        " bytes)  </div>";
+      output.innerHTML += "<div>" + getRelativeFilePath(file) + " (" + file.size + " bytes)  </div>";
     }
   } else {
     output.innerHTML = "Please select a directory to upload.";
   }
 
   const base32Cid = client.tools.convertB58btcToB32rfcCid(response.cid);
-  const subdomainPortalUrl = client.tools.addUrlSubdomain(
-    PORTAL_URL,
-    base32Cid
-  );
+  const subdomainPortalUrl = client.tools.addUrlSubdomain(PORTAL_URL, base32Cid);
 
-  const urlOutput = `${PORTAL_URL}/${response.cid}${
-    PORTAL_AUTH_TOKEN ? `?auth_token=${PORTAL_AUTH_TOKEN}` : ""
-  }`;
+  const urlOutput = `${PORTAL_URL}/${response.cid}${PORTAL_AUTH_TOKEN ? `?auth_token=${PORTAL_AUTH_TOKEN}` : ""}`;
   outputURL.innerHTML += "<br /><div>CID = " + response.cid + "</div>";
-  const subdomainUrlOutput = `${subdomainPortalUrl}${
-    PORTAL_AUTH_TOKEN ? `?auth_token=${PORTAL_AUTH_TOKEN}` : ""
-  }`;
+  const subdomainUrlOutput = `${subdomainPortalUrl}${PORTAL_AUTH_TOKEN ? `?auth_token=${PORTAL_AUTH_TOKEN}` : ""}`;
   outputURL.innerHTML +=
-    '<br /><div>Url = <a href="' +
-    subdomainUrlOutput +
-    '" target="_blank">' +
-    base32Cid +
-    "</a> </div><br />";
+    '<br /><div>Url = <a href="' + subdomainUrlOutput + '" target="_blank">' + base32Cid + "</a> </div><br />";
 }
 
 //
@@ -448,15 +551,10 @@ inputWebappFiles.addEventListener("input", function () {
 
 async function uploadWebapp() {
   var inputWebappFile = document.getElementById("webapp-inputFile");
-  var inputWebappDirNameValue = document.getElementById(
-    "webappDirName-input"
-  ).value;
+  var inputWebappDirNameValue = document.getElementById("webappDirName-input").value;
   var webappDirUploadName = webappFolderName;
-  var inputWebappIndexValue =
-    document.getElementById("webappIndex-input").value;
-  var inputWebappErrorPageValue = document.getElementById(
-    "webappErrorPage-input"
-  ).value;
+  var inputWebappIndexValue = document.getElementById("webappIndex-input").value;
+  var inputWebappErrorPageValue = document.getElementById("webappErrorPage-input").value;
 
   var outputWebapp = document.getElementById("outputWebapp");
   var outputWebappURL = document.getElementById("outputWebappURL");
@@ -475,10 +573,7 @@ async function uploadWebapp() {
     for (var i = 0; i < files.length; i++) {
       var file = files[i];
       const filesArray = Array.from(files);
-      const directory = filesArray.reduce(
-        (acc, file) => ({ ...acc, [getRelativeFilePath(file)]: file }),
-        {}
-      );
+      const directory = filesArray.reduce((acc, file) => ({ ...acc, [getRelativeFilePath(file)]: file }), {});
       const name = encodeURIComponent(file.name);
 
       let webAppDirName;
@@ -499,21 +594,13 @@ async function uploadWebapp() {
         webAppErrorpage = inputWebappErrorPageValue;
       }
 
-      if (
-        webAppDirName != "" &&
-        webAppIndex === undefined &&
-        webAppErrorpage === undefined
-      ) {
+      if (webAppDirName != "" && webAppIndex === undefined && webAppErrorpage === undefined) {
         response = await client.uploadWebapp(directory, {
           customDirname: webAppDirName,
         });
       }
 
-      if (
-        webAppDirName != "" &&
-        webAppIndex != undefined &&
-        webAppErrorpage != undefined
-      ) {
+      if (webAppDirName != "" && webAppIndex != undefined && webAppErrorpage != undefined) {
         response = await client.uploadWebapp(directory, {
           customDirname: webAppDirName,
           tryFiles: [webAppIndex],
@@ -521,34 +608,21 @@ async function uploadWebapp() {
         });
       }
 
-      if (
-        webAppDirName != "" &&
-        webAppIndex != undefined &&
-        webAppErrorpage === undefined
-      ) {
+      if (webAppDirName != "" && webAppIndex != undefined && webAppErrorpage === undefined) {
         response = await client.uploadWebapp(directory, {
           customDirname: webAppDirName,
           tryFiles: [webAppIndex],
         });
       }
 
-      if (
-        webAppDirName != "" &&
-        webAppErrorpage != undefined &&
-        webAppIndex === undefined
-      ) {
+      if (webAppDirName != "" && webAppErrorpage != undefined && webAppIndex === undefined) {
         response = await client.uploadWebapp(directory, {
           customDirname: webAppDirName,
           errorPages: { 404: "/" + webAppErrorpage },
         });
       }
 
-      outputWebapp.innerHTML +=
-        "<div>" +
-        getRelativeFilePath(file) +
-        " (" +
-        file.size +
-        " bytes)  </div>";
+      outputWebapp.innerHTML += "<div>" + getRelativeFilePath(file) + " (" + file.size + " bytes)  </div>";
     }
   } else {
     outputWebapp.innerHTML = "Please select a directory to upload.";
@@ -557,19 +631,11 @@ async function uploadWebapp() {
   outputWebapp.innerHTML += "<br />";
 
   const base32Cid = client.tools.convertB58btcToB32rfcCid(response.cid);
-  const subdomainPortalUrl = client.tools.addUrlSubdomain(
-    PORTAL_URL,
-    base32Cid
-  );
+  const subdomainPortalUrl = client.tools.addUrlSubdomain(PORTAL_URL, base32Cid);
 
-  const urlOutput = `${PORTAL_URL}/${response.cid}${
-    PORTAL_AUTH_TOKEN ? `?auth_token=${PORTAL_AUTH_TOKEN}` : ""
-  }`;
-  outputWebappURL.innerHTML +=
-    "<br /><div class='outputtext'>CID = " + response.cid + "</div>";
-  const subdomainUrlOutput = `${subdomainPortalUrl}${
-    PORTAL_AUTH_TOKEN ? `?auth_token=${PORTAL_AUTH_TOKEN}` : ""
-  }`;
+  const urlOutput = `${PORTAL_URL}/${response.cid}${PORTAL_AUTH_TOKEN ? `?auth_token=${PORTAL_AUTH_TOKEN}` : ""}`;
+  outputWebappURL.innerHTML += "<br /><div class='outputtext'>CID = " + response.cid + "</div>";
+  const subdomainUrlOutput = `${subdomainPortalUrl}${PORTAL_AUTH_TOKEN ? `?auth_token=${PORTAL_AUTH_TOKEN}` : ""}`;
   outputWebappURL.innerHTML +=
     '<br /><div class="outputtext">Url = <a href="' +
     subdomainUrlOutput +
@@ -598,8 +664,7 @@ async function pinCid() {
 
   response = await client.pinCid(inputPinCidValue);
 
-  outputPinCid.innerHTML =
-    "<br /><div>Pin = " + JSON.stringify(response) + "</div>";
+  outputPinCid.innerHTML = "<br /><div>Pin = " + JSON.stringify(response) + "</div>";
 }
 
 //
@@ -622,8 +687,7 @@ async function deleteCid() {
 
   response = await client.deleteCid(inputDeleteCidValue);
 
-  outputDeleteCid.innerHTML =
-    "<br /><div>Delete = " + JSON.stringify(response) + "</div>";
+  outputDeleteCid.innerHTML = "<br /><div>Delete = " + JSON.stringify(response) + "</div>";
 }
 
 //
@@ -640,9 +704,7 @@ inputAllcidsFromCid.addEventListener("input", function () {
 
 async function getAllInfosFromCid() {
   try {
-    var inputAllcidsFromCidValue = document.getElementById(
-      "allcidsFromCid-input"
-    ).value;
+    var inputAllcidsFromCidValue = document.getElementById("allcidsFromCid-input").value;
     var outputAllcidsFromCid = document.getElementById("outputAllcidsFromCid");
     let response;
 
@@ -651,40 +713,27 @@ async function getAllInfosFromCid() {
     response = await client.tools.getAllInfosFromCid(inputAllcidsFromCidValue);
 
     outputAllcidsFromCid.innerHTML = "<br /><b>Encoding:</b>";
-    outputAllcidsFromCid.innerHTML +=
-      "<br />base58btc  = " + response.zcid + "<br />";
-    outputAllcidsFromCid.innerHTML +=
-      "<div><br />base32 = " + response.bcid + "</div>";
-    outputAllcidsFromCid.innerHTML +=
-      "<div><br />base64url = " + response.ucid + "</div>";
-    //        if (response.b3filesize != 0) {
-    outputAllcidsFromCid.innerHTML += "<br /><br /><div><b>Raw CID:</b></div>";
-    outputAllcidsFromCid.innerHTML +=
-      "<div>Size = " +
-      convertBytesToMegabytes(response.b3filesize) +
-      " MB (" +
-      response.b3filesize +
-      " bytes)</div>";
-    outputAllcidsFromCid.innerHTML += "<br /><br /><div><b>Multihash</b></div>";
-    outputAllcidsFromCid.innerHTML += "<div>Type: BLAKE3 256-bits (0x1f)</div>";
-    outputAllcidsFromCid.innerHTML +=
-      "<div>Hash (hex) = " + response.b3hashhex + "</div>";
-    outputAllcidsFromCid.innerHTML +=
-      "<br /><div>mHash (base64url) = " + response.mhashb64url + "</div>";
+    outputAllcidsFromCid.innerHTML += "<br />base58btc  = " + response.zcid + "<br />";
+    outputAllcidsFromCid.innerHTML += "<div><br />base32 = " + response.bcid + "</div>";
+    outputAllcidsFromCid.innerHTML += "<div><br />base64url = " + response.ucid + "</div>";
+    if (response.b3filesize != 0) {
+      outputAllcidsFromCid.innerHTML += "<br /><br /><div><b>Raw CID:</b></div>";
+      outputAllcidsFromCid.innerHTML +=
+        "<div>Size = " + convertBytesToMegabytes(response.b3filesize) + " MB (" + response.b3filesize + " bytes)</div>";
+      outputAllcidsFromCid.innerHTML += "<br /><br /><div><b>Multihash</b></div>";
+      outputAllcidsFromCid.innerHTML += "<div>Type: BLAKE3 256-bits (0x1f)</div>";
+      outputAllcidsFromCid.innerHTML += "<div>Hash (hex) = " + response.b3hashhex + "</div>";
+      outputAllcidsFromCid.innerHTML += "<br /><div>mHash (base64url) = " + response.mhashb64url + "</div>";
 
-    response2 = await client.getStorageLocations(inputAllcidsFromCidValue);
-    outputAllcidsFromCid.innerHTML +=
-      "<br /><br /><div><b>Storage Locations:</b></div>";
-    outputAllcidsFromCid.innerHTML +=
-      "<div><pre><code>" +
-      JSON.stringify(response2, null, "  ") +
-      "</pre></code></div>";
+      response2 = await client.getStorageLocations(inputAllcidsFromCidValue);
+      outputAllcidsFromCid.innerHTML += "<br /><br /><div><b>Storage Locations:</b></div>";
+      outputAllcidsFromCid.innerHTML +=
+        "<div><pre><code>" + JSON.stringify(response2, null, "  ") + "</pre></code></div>";
 
-    response3 = await client.getDownloadUrls(inputAllcidsFromCidValue);
-    outputAllcidsFromCid.innerHTML +=
-      "<br /><br /><div><b>Download Urls:</b></div>";
-    outputAllcidsFromCid.innerHTML += "<div>" + response3 + "</div>";
-    //      }
+      response3 = await client.getDownloadUrls(inputAllcidsFromCidValue);
+      outputAllcidsFromCid.innerHTML += "<br /><br /><div><b>Download Urls:</b></div>";
+      outputAllcidsFromCid.innerHTML += "<div>" + response3 + "</div>";
+    }
   } catch (error) {
     console.log("ERROR: " + error);
   }
@@ -715,8 +764,7 @@ async function getCidTOmHash() {
 
   response = await client.tools.convertS5CidToMHashB64url(inputCidTOmhashCid);
 
-  outputCidTOmhashData.innerHTML =
-    "<br /><div>mHash (base64url) = " + response + "</div>";
+  outputCidTOmhashData.innerHTML = "<br /><div>mHash (base64url) = " + response + "</div>";
 }
 
 //
@@ -732,16 +780,14 @@ inputCidTOb3hash.addEventListener("input", function () {
 });
 
 async function getb3hashHex() {
-  var inputCidTOb3hashValue =
-    document.getElementById("cidTOb3hash-input").value;
+  var inputCidTOb3hashValue = document.getElementById("cidTOb3hash-input").value;
   var outputCidTOb3hash = document.getElementById("outputCidTOb3hash");
   let response;
   outputCidTOb3hash.innerHTML = "<br /><div> waiting ...</div>";
 
   response = await client.tools.convertS5CidToB3hashHex(inputCidTOb3hashValue);
 
-  outputCidTOb3hash.innerHTML =
-    "<br /><div>B3hash (hex) = " + response + "</div>";
+  outputCidTOb3hash.innerHTML = "<br /><div>B3hash (hex) = " + response + "</div>";
 }
 
 //
@@ -758,15 +804,10 @@ inputMetadataFromCid.addEventListener("input", function () {
 
 async function getMetadataFromCid() {
   try {
-    var inputmetadataFromCidValue = document.getElementById(
-      "metadataFromCid-input"
-    ).value;
-    var outputMetadataFromCidData = document.getElementById(
-      "outputMetadataFromCid"
-    );
+    var inputmetadataFromCidValue = document.getElementById("metadataFromCid-input").value;
+    var outputMetadataFromCidData = document.getElementById("outputMetadataFromCid");
     let response;
-    outputMetadataFromCidData.innerHTML =
-      "<br /><div> wait searching ...</div>";
+    outputMetadataFromCidData.innerHTML = "<br /><div> wait searching ...</div>";
     response = await client.getMetadata(inputmetadataFromCidValue);
 
     outputMetadataFromCidData.innerHTML =
@@ -776,9 +817,7 @@ async function getMetadataFromCid() {
       JSON.stringify(response, null, "  ") +
       "</code></pre></div>";
   } catch (error) {
-    outputMetadataFromCidData.innerHTML =
-      "<br /><div>Error: Raw CIDs do not have metadata</div>";
+    outputMetadataFromCidData.innerHTML = "<br /><div>Error: Raw CIDs do not have metadata</div>";
     console.log("ERROR: " + error);
-    throw "Raw CIDs do not have metadata";
   }
 }

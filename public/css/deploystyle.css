@@ -116,3 +116,92 @@ pre {
   max-width: 800px;
   color: #000;
 }
+
+* {
+  box-sizing: border-box;
+}
+
+.container {
+  max-width: 400px;
+  margin: 0 auto;
+}
+
+.center {
+  text-align: center;
+}
+
+.title {
+  margin-top: 0;
+}
+
+.divider {
+  border-top: 3px solid #bbb;
+}
+
+.form-group {
+  margin-bottom: 15px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 5px;
+  font-weight: bold;
+}
+
+.form-group input[type="text"] {
+  width: 100%;
+  padding: 5px;
+  border: 1px solid #bbb;
+  border-radius: 4px;
+}
+
+.form-group .button-container {
+  display: flex;
+  justify-content: center;
+  position: relative;
+}
+
+.form-group .button-container button {
+  padding: 10px 15px;
+  background-color: #4caf50;
+  border: none;
+  color: white;
+  border-radius: 4px;
+  cursor: pointer;
+  position: relative;
+  z-index: 1;
+  margin-right: 10px; /* Added spacing between buttons */
+}
+
+.form-group .button-container .cancel-button {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 0;
+}
+
+.hidden {
+  display: none;
+}
+
+@media screen and (max-width: 480px) {
+  .form-group {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .form-group label,
+  .form-group input[type="text"] {
+    width: 100%;
+  }
+
+  .form-group .button-container {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .form-group .button-container button {
+    margin-top: 10px;
+    margin-right: 0; /* Reset margin-right for mobile layout */
+  }
+}
